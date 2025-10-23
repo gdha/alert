@@ -8,7 +8,7 @@
 %define mandir  /usr/share/man
 
 Name: alert
-Version: 1.0
+Version: 1.1
 Release: 1%{?rpmrelease}%{?dist}
 Summary: Send messages to MS Teams work-flows
 
@@ -52,7 +52,7 @@ make build
 
 
 %files
-%license COPYING
+%license LICENSE
 %defattr(-, root, root, 0755)
 %{bindir}/%{name}
 %doc %{_mandir}/man8/%{name}.8*
@@ -60,5 +60,7 @@ make build
 
 
 %changelog
-* Tue  Sep 23 2025 ( gdhaese1 at its.jnj.com ) - 1.0-1
+* Thu  Oct 23 2025 ( gratien.dhaese at gmail.com ) - 1.1-1
+- secure webhook_url and re-arrange packaging and dist
+* Tue  Sep 23 2025 ( gratien.dhaese at gmail.com ) - 1.0-1
 - initial release

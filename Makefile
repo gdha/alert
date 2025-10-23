@@ -1,7 +1,8 @@
 # Makefile for alert
 
 name = alert
-specfile = $(name).spec
+specfile = packaging/rpm/$(name).spec
+dscfile = packaging/debian/$(name).dsc
 
 version := $(shell awk 'BEGIN { FS=":" } /^Version:/ { print $$2}' $(specfile) | sed -e 's/ //g' -e 's/\$$//')
 
@@ -25,6 +26,7 @@ LDFLAGS = -lcurl
 TARGET = $(name)
 SRC = $(name).c
 BIN_DIR = usr/bin
+
 
 all: build
 	@echo "Nothing to build. Use \`make help' for more information."
@@ -56,24 +58,24 @@ clean:
 	@echo -e "\033[1m== Cleanup temporary files ==\033[0;0m"
 	rm -f $(TARGET) *.o
 	-rm -f $(name).8
-	-rm $(name)-$(distversion).tar.gz
+	-rm dist/$(name)-$(distversion).tar.gz
 
 .PHONY: all clean
 
 
-dist: clean $(name)-$(distversion).tar.gz
+dist: clean dist/$(name)-$(distversion).tar.gz
 
-$(name)-$(distversion).tar.gz: $(name).spec
+dist/$(name)-$(distversion).tar.gz:
 	@echo -e "\033[1m== Building archive $(name)-$(distversion) ==\033[0;0m"
-	tar -czf $(name)-$(distversion).tar.gz --transform='s,^,$(name)-$(version)/,S' \
-	Makefile $(name).spec COPYING $(name).c $(name).8.md
+	tar -czf dist/$(name)-$(distversion).tar.gz --transform='s,^,$(name)-$(version)/,S' \
+	Makefile packaging LICENSE $(name).c $(name).8.md
 	
-rpm: dist $(name).spec
+rpm: dist
 	@echo -e "\033[1m== Building RPM package $(name)-$(distversion)==\033[0;0m"
 	rpmbuild -ta --clean \
-		--define "_rpmfilename %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
+		--define "_rpmfilename dist/%%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
 		--define "debug_package %{nil}" \
-		--define "_rpmdir %(pwd)" $(name)-$(distversion).tar.gz
+		--define "_rpmdir %(pwd)" dist/$(name)-$(distversion).tar.gz
 
 install: man $(TARGET)
 	@echo -e "\033[1m== Installing $(TARGETS)  ==\033[0;0m"
