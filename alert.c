@@ -18,14 +18,15 @@
 #include <sys/stat.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <ctype.h>
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define CONFIG_DEFAULT "/etc/alert.conf"
 #define IMAGE_URL_DEFAULT "https://www.energise.co.nz/wp-content/uploads/2016/04/Prove-you-are-not-a-robot-and-digitalise-books-and-refine-maps.jpg"
 #define PROGNAME "alert"
 #define TIER_FILE "/etc/tier"
 #define OHAI_BIN "/bin/ohai"
-#define STDIN_TIMEOUT_SEC 10
+#define STDIN_TIMEOUT_SEC 20
 
 // Helper function to trim newline and trailing spaces
 void trim_newline(char *str) {
@@ -96,6 +97,37 @@ int read_environment_ohai(char *env, size_t envsz) {
 // Helper to check if a string starts with "https://"
 int is_https_url(const char *url) {
     return (strncmp(url, "https://", 8) == 0);
+}
+
+// Extract hostname from a URL (very simple, handles https://host[:port]/...)
+int extract_hostname_from_url(const char *url, char *host, size_t hostsz) {
+    const char *p = url;
+    if (strncmp(p, "https://", 8) == 0) p += 8;
+    else if (strncmp(p, "http://", 7) == 0) p += 7; // handle if needed
+    // host ends at ':' (port) or '/' or end
+    const char *end = p;
+    while (*end && *end != '/' && *end != ':') end++;
+    size_t len = (size_t)(end - p);
+    if (len == 0 || len >= hostsz) return 0;
+    memcpy(host, p, len);
+    host[len] = '\0';
+    return 1;
+}
+
+// Check whether hostname is allowed for webhook
+int is_allowed_webhook_host(const char *host) {
+    if (!host || host[0] == '\0') return 0;
+    char lower[256];
+    size_t i;
+    for (i = 0; i < sizeof(lower)-1 && host[i]; ++i) {
+        lower[i] = tolower((unsigned char)host[i]);
+    }
+    lower[i] = '\0';
+    // Exact match to required host:
+    // if (strcmp(lower, "30.environment.api.powerplatform.com") == 0) return 1;
+    // Optionally you can allow more patterns, e.g. ends-with:
+    if (strstr(lower, ".environment.api.powerplatform.com") != NULL) return 1;
+    return 0;
 }
 
 // Read body from file or stdin, with timeout on stdin
@@ -254,6 +286,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Validate webhook hostname is the expected one (e.g. 30.environment.api.powerplatform.com)
+    char host[256];
+    if (!extract_hostname_from_url(webhook_url, host, sizeof(host))) {
+        fprintf(stderr, "Could not parse hostname from webhook URL: %s\n", webhook_url);
+        return 1;
+    }
+    if (!is_allowed_webhook_host(host)) {
+        fprintf(stderr, "Refusing to use webhook URL with unexpected hostname: %s (host: %s)\n", webhook_url, host);
+        return 1;
+    }
+
     // SSRF protection: Only allow HTTPS for image URL
     if (!is_https_url(image_url)) {
         fprintf(stderr, "Refusing to use non-HTTPS image URL: %s\n", image_url);
@@ -334,6 +377,16 @@ int main(int argc, char *argv[]) {
     curl_easy_setopt(curl, CURLOPT_URL, webhook_url);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // Enforce TLS certificate verification and host name verification.
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+
+    /* Optional: pin the server public key if you have the key:
+       curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256//Base64EncodedSPKI");
+       This provides extra protection against rogue CAs or DNS attacks.
+    */
+
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
