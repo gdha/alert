@@ -1,0 +1,13 @@
+Source: alert
+Section: admin
+Priority: optional
+Maintainer: Gratien Dhaese <gratien.dhaese@gmail.com>
+Vcs-Git: https://github.com/gdha/alert
+Homepage: 
+
+Package: alert
+Architecture: all
+Provides: alert
+Build-Depends: debhelper (>= 10)
+Depends: debianutils(>=1.16), libcurl-devel
+Description: alert(8) — Tool to Send Messages to MS Teams Workflows
