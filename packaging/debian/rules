@@ -60,17 +60,17 @@ binary-indep: build
 
 	#  The DESTDIR Has To Be Exactly debian/alert
 	mkdir -vp -m0755 \
-		debian/alert/usr/bin/
-
+		debian/alert/usr/bin/ \
+		debian/alert/usr/share/man/man8/
 
 
 	if [ $$(basename $$(pwd)) = "BUILD" ]; then \
-	    cp -av ../alert debian/alert/usr/bin/ ; \
+		install -Dp -m0755 ./alert debian/alert/usr/bin/ ; \
 	fi
 
 	# update man page with correct locations
 	if [ $$(basename $$(pwd)) = "BUILD" ]; then \
-	    install -Dp -m0644 ./alert.8 debian/alert/usr/share/man/man8/alert.8 ; \
+		install -Dp -m0644 ./alert.8 debian/alert/usr/share/man/man8/alert.8 ; \
 	fi
 
 	# --- end custom part for installing
@@ -101,7 +101,10 @@ binary-indep: build
 	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums
-	dh_builddeb
+	# the --destdir=dist is not official supported by dpkg-buildpackage
+	dh_builddeb --destdir=dist
+# Final cleanup the parent directory
+	make clean
 
 # Build architecture-dependent files here.
 binary-arch: build

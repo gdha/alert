@@ -59,6 +59,7 @@ clean:
 	@echo -e "\033[1m== Cleanup temporary files ==\033[0;0m"
 	rm -f $(TARGET) *.o
 	-rm -f $(name).8
+	-rm -f build-stamp configure-stamp
 	-rm dist/$(name)-$(distversion).tar.gz
 
 .PHONY: all clean
