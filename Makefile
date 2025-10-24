@@ -13,7 +13,7 @@ etcdir = /etc
 
 
 # ronn is a tool to generate man-pages directly from MarkDown files
-ronn := $(shell if type -p ronn >/dev/null; then echo ronn; fi)
+RONN := $(shell if type -p ronn >/dev/null; then echo ronn; fi)
 
 distversion = $(version)
 rpmrelease =
@@ -44,6 +44,7 @@ help:
   install         - Install alert to BINDIR (may replace files)\n\
   dist            - Create tar file\n\
   rpm             - Create RPM package\n\
+  deb             - Create DEB package\n\
 \n\
 "
 
@@ -51,7 +52,7 @@ man: $(name).8
 
 %.8: %.8.md
 	@echo -e "\033[1m== Generating man page ==\033[0;0m"
-	LANG=en_US.UTF-8 $(ronn) --roff $<
+	LANG=en_US.UTF-8 ronn --roff $<
 	echo "Man page was successfully created."
 
 clean:
@@ -76,6 +77,14 @@ rpm: dist
 		--define "_rpmfilename dist/%%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
 		--define "debug_package %{nil}" \
 		--define "_rpmdir %(pwd)" dist/$(name)-$(distversion).tar.gz
+deb: dist
+	@echo -e "\033[1m== Building DEB package $(name)-$(distversion)==\033[0;0m"
+	cp -r packaging/debian/ .
+	chmod 755 debian/rules
+	fakeroot debian/rules clean
+	fakeroot dh_install
+	fakeroot debian/rules binary
+	-rm -rf debian/
 
 install: man $(TARGET)
 	@echo -e "\033[1m== Installing $(TARGETS)  ==\033[0;0m"
