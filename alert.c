@@ -103,7 +103,8 @@ int parse_scm_appbranch_from_ohai_output(const char *output, char *env, size_t e
             const char *s = strchr(r, '"');
             if (!s) break;
             size_t len = (size_t)(s - r);
-            if (len == 0 || len >= envsz) return 0;
+            if (len == 0) return 0;
+            if (len >= envsz) return 0;
             memcpy(env, r, len);
             env[len] = '\0';
             return 1;
@@ -130,8 +131,8 @@ int read_environment_ohai(char *env, size_t envsz) {
     if (pid == 0) {
         char *const argv[] = { "ohai", NULL };
         close(pipefd[0]);
-        if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(127);
-        if (dup2(pipefd[1], STDERR_FILENO) < 0) _exit(127);
+        if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(125);
+        if (dup2(pipefd[1], STDERR_FILENO) < 0) _exit(126);
         close(pipefd[1]);
         execv(OHAI_BIN, argv);
         _exit(127);
@@ -141,7 +142,7 @@ int read_environment_ohai(char *env, size_t envsz) {
 
     char tmp[4096];
     size_t total = 0;
-    size_t cap = 1;
+    size_t cap = sizeof(tmp) + 1;
     char *output = malloc(cap);
     if (!output) {
         close(pipefd[0]);
@@ -153,7 +154,7 @@ int read_environment_ohai(char *env, size_t envsz) {
     ssize_t n;
     while ((n = read(pipefd[0], tmp, sizeof(tmp))) > 0) {
         if (total + (size_t)n + 1 > cap) {
-            size_t new_cap = cap;
+            size_t new_cap = cap * 2;
             while (new_cap < total + (size_t)n + 1) new_cap *= 2;
             char *new_output = realloc(output, new_cap);
             if (!new_output) {
@@ -185,7 +186,7 @@ int read_environment_ohai(char *env, size_t envsz) {
 
     int ok = parse_scm_appbranch_from_ohai_output(output, env, envsz);
     free(output);
-    return ok && env[0] != '\0';
+    return ok;
 }
 
 // Helper to check if a string starts with "https://"
