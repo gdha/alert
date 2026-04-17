@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <curl/curl.h>
@@ -19,6 +20,7 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <ctype.h>
+#include <sys/wait.h>
 
 #define VERSION "1.1"
 #define CONFIG_DEFAULT "/etc/alert.conf"
@@ -78,20 +80,113 @@ int read_environment_file(char *env, size_t envsz) {
 }
 
 // Try to read environment from ohai output
+int parse_scm_appbranch_from_ohai_output(const char *output, char *env, size_t envsz) {
+    const char *p = output;
+    while ((p = strchr(p, '"')) != NULL) {
+        const char *q = strchr(p + 1, '"');
+        if (!q) break;
+        if ((size_t)(q - (p + 1)) == strlen("scm_appbranch") &&
+            strncasecmp(p + 1, "scm_appbranch", strlen("scm_appbranch")) == 0) {
+            const char *r = q + 1;
+            while (*r == ' ' || *r == '\t') r++;
+            if (*r != ':') {
+                p = q + 1;
+                continue;
+            }
+            r++;
+            while (*r == ' ' || *r == '\t') r++;
+            if (*r != '"') {
+                p = q + 1;
+                continue;
+            }
+            r++;
+            const char *s = strchr(r, '"');
+            if (!s) break;
+            size_t len = (size_t)(s - r);
+            if (len == 0) return 0;
+            if (len >= envsz) return 0;
+            memcpy(env, r, len);
+            env[len] = '\0';
+            return 1;
+        }
+        p = q + 1;
+    }
+    return 0;
+}
+
 int read_environment_ohai(char *env, size_t envsz) {
     struct stat st;
     if (stat(OHAI_BIN, &st) != 0 || !(st.st_mode & S_IXUSR)) return 0;
-    const char *cmd = OHAI_BIN " | grep -i scm_appbranch | cut -d\\\" -f4";
-    FILE *fp = popen(cmd, "r");
-    if (!fp) return 0;
-    if (fgets(env, envsz, fp)) {
-        trim_newline(env);
-        pclose(fp);
-        if (env[0] == '\0') return 0;
-        return 1;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return 0;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return 0;
     }
-    pclose(fp);
-    return 0;
+
+    if (pid == 0) {
+        char *const argv[] = { "ohai", NULL };
+        close(pipefd[0]);
+        if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(125);
+        if (dup2(pipefd[1], STDERR_FILENO) < 0) _exit(126);
+        close(pipefd[1]);
+        execv(OHAI_BIN, argv);
+        _exit(127);
+    }
+
+    close(pipefd[1]);
+
+    char tmp[4096];
+    size_t total = 0;
+    size_t cap = sizeof(tmp) + 1;
+    char *output = malloc(cap);
+    if (!output) {
+        close(pipefd[0]);
+        waitpid(pid, NULL, 0);
+        return 0;
+    }
+    output[0] = '\0';
+
+    ssize_t n;
+    while ((n = read(pipefd[0], tmp, sizeof(tmp))) > 0) {
+        if (total + (size_t)n + 1 > cap) {
+            size_t new_cap = cap * 2;
+            while (new_cap < total + (size_t)n + 1) new_cap *= 2;
+            char *new_output = realloc(output, new_cap);
+            if (!new_output) {
+                free(output);
+                close(pipefd[0]);
+                waitpid(pid, NULL, 0);
+                return 0;
+            }
+            output = new_output;
+            cap = new_cap;
+        }
+        memcpy(output + total, tmp, (size_t)n);
+        total += (size_t)n;
+        output[total] = '\0';
+    }
+
+    int read_failed = (n < 0);
+    close(pipefd[0]);
+
+    int status;
+    if (waitpid(pid, &status, 0) < 0) {
+        free(output);
+        return 0;
+    }
+    if (read_failed || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        free(output);
+        return 0;
+    }
+
+    int ok = parse_scm_appbranch_from_ohai_output(output, env, envsz);
+    free(output);
+    return ok;
 }
 
 // Helper to check if a string starts with "https://"
