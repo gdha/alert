@@ -129,7 +129,8 @@ int read_environment_ohai(char *env, size_t envsz) {
     }
 
     if (pid == 0) {
-        char *const argv[] = { "ohai", NULL };
+        char ohai_argv0[] = "ohai";
+        char *const argv[] = { ohai_argv0, NULL };
         close(pipefd[0]);
         if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(125);
         if (dup2(pipefd[1], STDERR_FILENO) < 0) _exit(126);
