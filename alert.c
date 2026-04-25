@@ -129,7 +129,7 @@ int read_environment_ohai(char *env, size_t envsz) {
     }
 
     if (pid == 0) {
-        char ohai_argv0[] = "ohai";
+        char ohai_argv0[] = {'o', 'a', 'h', 'i', '\0'};
         char *const argv[] = { ohai_argv0, NULL };
         close(pipefd[0]);
         if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(125);
@@ -323,18 +323,23 @@ void show_usage(int code) {
 }
 
 int main(int argc, char *argv[]) {
-    char config[256] = CONFIG_DEFAULT;
-    char title[1024] = "";
-    char body[8192] = "";
+    char config[256] = {0};
+    char title[1024] = {0};
+    char body[8192] = {0};
     char *body_ptr = NULL;
-    char file[256] = "";
-    char image_url[1024] = IMAGE_URL_DEFAULT;
-    char webhook_url[2048] = "";
-    char environment[128] = "";
+    char file[256] = {0};
+    char image_url[1024] = {0};
+    char webhook_url[2048] = {0};
+    char environment[128] = {0};
     int optidx = 0, c;
     int env_arg_given = 0;
     int webhook_arg_given = 0;
     int body_ptr_is_malloc = 0;
+
+    strncpy(config, CONFIG_DEFAULT, sizeof(config) - 1);
+    config[sizeof(config) - 1] = '\0';
+    strncpy(image_url, IMAGE_URL_DEFAULT, sizeof(image_url) - 1);
+    image_url[sizeof(image_url) - 1] = '\0';
 
     static struct option longopts[] = {
         {"config", required_argument, 0, 'c'},
