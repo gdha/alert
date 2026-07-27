@@ -13,7 +13,7 @@ Release: 1%{?rpmrelease}%{?dist}
 Summary: Send messages to MS Teams work-flows
 
 License: GPLv3
-URL: https://sourcecode.jnj.com/projects/SRV-001803/repos/alert
+URL: https://github.com/gdha/alert
 Source0: %{name}-%{version}.tar.gz
 
 BuildRequires: gcc
